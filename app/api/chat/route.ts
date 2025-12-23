@@ -275,29 +275,35 @@ ${lastMessageText}
         }
     }
 
-    // System messages with multiple cache breakpoints for optimal caching:
-    // - Breakpoint 1: Static instructions (~1500 tokens) - rarely changes
-    // - Breakpoint 2: Current XML context - changes per diagram, but constant within a conversation turn
-    // This allows: if only user message changes, both system caches are reused
-    //              if XML changes, instruction cache is still reused
-    const systemMessages = [
-        // Cache breakpoint 1: Instructions (rarely change)
-        {
-            role: "system" as const,
-            content: systemMessage,
-            providerOptions: {
-                bedrock: { cachePoint: { type: "default" } },
-            },
-        },
-        // Cache breakpoint 2: Current diagram XML context
-        {
-            role: "system" as const,
-            content: `Current diagram XML:\n"""xml\n${xml || ""}\n"""\nWhen using edit_diagram, COPY search patterns exactly from this XML - attribute order matters!`,
-            providerOptions: {
-                bedrock: { cachePoint: { type: "default" } },
-            },
-        },
-    ]
+    // System message with diagram context
+    // Note: Combined into single message for compatibility with OpenAI-compatible APIs (e.g., ZhiPu)
+    // Bedrock cache points are only added when using Bedrock provider
+    const isBedrock = process.env.AI_PROVIDER === "bedrock"
+    const systemMessages = isBedrock
+        ? [
+              // Bedrock: Use multiple cache breakpoints for optimal caching
+              {
+                  role: "system" as const,
+                  content: systemMessage,
+                  providerOptions: {
+                      bedrock: { cachePoint: { type: "default" } },
+                  },
+              },
+              {
+                  role: "system" as const,
+                  content: `Current diagram XML:\n"""xml\n${xml || ""}\n"""\nWhen using edit_diagram, COPY search patterns exactly from this XML - attribute order matters!`,
+                  providerOptions: {
+                      bedrock: { cachePoint: { type: "default" } },
+                  },
+              },
+          ]
+        : [
+              // Other providers: Single combined system message
+              {
+                  role: "system" as const,
+                  content: `${systemMessage}\n\nCurrent diagram XML:\n"""xml\n${xml || ""}\n"""\nWhen using edit_diagram, COPY search patterns exactly from this XML - attribute order matters!`,
+              },
+          ]
 
     const allMessages = [...systemMessages, ...enhancedMessages]
 
